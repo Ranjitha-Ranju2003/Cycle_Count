@@ -9,9 +9,17 @@ if (!databaseUrl) {
   throw new Error("DATABASE_URL is not set. Add it to your local .env file or Render environment variables.");
 }
 
+const parsedDatabaseUrl = new URL(databaseUrl);
+const isLocalDatabase =
+  parsedDatabaseUrl.hostname === "localhost" || parsedDatabaseUrl.hostname === "127.0.0.1";
+
+// Let the pg Pool SSL config control certificate handling instead of sslmode query params.
+parsedDatabaseUrl.searchParams.delete("sslmode");
+parsedDatabaseUrl.searchParams.delete("uselibpqcompat");
+
 const pool = new Pool({
-  connectionString: databaseUrl,
-  ssl: databaseUrl.includes("localhost")
+  connectionString: parsedDatabaseUrl.toString(),
+  ssl: isLocalDatabase
     ? false
     : {
         rejectUnauthorized: false,
