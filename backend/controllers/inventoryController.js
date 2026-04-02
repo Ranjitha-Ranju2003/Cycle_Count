@@ -10,8 +10,24 @@ const REQUIRED_COLUMNS = {
 const normalizeString = (value) => String(value ?? "").trim();
 
 const parseExcelBuffer = (buffer) => {
-  const workbook = XLSX.read(buffer, { type: "buffer" });
+  let workbook;
+
+  try {
+    workbook = XLSX.read(buffer, { type: "buffer" });
+  } catch (error) {
+    const parseError = new Error("Unable to read the Excel file. Please upload a valid .xlsx file.");
+    parseError.status = 400;
+    throw parseError;
+  }
+
   const sheetName = workbook.SheetNames[0];
+
+  if (!sheetName) {
+    const error = new Error("The uploaded Excel file does not contain any sheets.");
+    error.status = 400;
+    throw error;
+  }
+
   const worksheet = workbook.Sheets[sheetName];
   const rows = XLSX.utils.sheet_to_json(worksheet, { defval: "", raw: false });
 
@@ -55,6 +71,7 @@ const uploadExcel = async (req, res, next) => {
       inventory,
     });
   } catch (error) {
+    console.error("Excel upload failed:", error.message);
     next(error);
   }
 };

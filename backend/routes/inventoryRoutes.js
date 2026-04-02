@@ -12,7 +12,9 @@ const upload = multer({
       file.originalname.toLowerCase().endsWith(".xlsx");
 
     if (!isExcel) {
-      return cb(new Error("Only .xlsx files are supported"));
+      const error = new Error("Only .xlsx files are supported");
+      error.status = 400;
+      return cb(error);
     }
 
     cb(null, true);

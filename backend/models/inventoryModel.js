@@ -87,6 +87,7 @@ const upsertInventoryItems = async (items) => {
     await client.query("COMMIT");
   } catch (error) {
     await client.query("ROLLBACK");
+    console.error("Failed to upsert inventory items:", error.message);
     throw error;
   } finally {
     client.release();
