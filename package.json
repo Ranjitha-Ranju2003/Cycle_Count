@@ -1,0 +1,15 @@
+{
+  "name": "dataforcyclecount",
+  "version": "1.0.0",
+  "description": "Full-stack warehouse cycle count app with React, Express, and PostgreSQL.",
+  "main": "index.js",
+  "scripts": {
+    "frontend:dev": "npm --prefix frontend run dev",
+    "frontend:build": "npm --prefix frontend run build",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs"
+}
