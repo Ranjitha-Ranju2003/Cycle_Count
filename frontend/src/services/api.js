@@ -1,4 +1,5 @@
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "/api";
+const API_BASE_URL =
+  import.meta.env.VITE_API_BASE_URL || "https://cycle-count.onrender.com/api";
 
 const handleResponse = async (responsePromise) => {
   const response = await responsePromise;
