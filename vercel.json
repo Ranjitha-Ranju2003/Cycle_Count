@@ -6,6 +6,10 @@
   "outputDirectory": "dist",
   "rewrites": [
     {
+      "source": "/api/:path*",
+      "destination": "https://cycle-count-1.onrender.com/:path*"
+    },
+    {
       "source": "/(.*)",
       "destination": "/index.html"
     }
