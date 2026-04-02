@@ -44,8 +44,14 @@ app.get("/health", (_req, res) => {
   res.json({ status: "ok" });
 });
 
+app.get("/api/health", (_req, res) => {
+  res.json({ status: "ok" });
+});
+
 app.use("/", authRoutes);
 app.use("/", inventoryRoutes);
+app.use("/api", authRoutes);
+app.use("/api", inventoryRoutes);
 
 app.use((err, _req, res, _next) => {
   console.error(err);
