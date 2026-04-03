@@ -1,4 +1,6 @@
-export default function DashboardTable({
+import { memo } from "react";
+
+function DashboardTable({
   inventory,
   searchTerm,
   onSearchChange,
@@ -84,3 +86,5 @@ export default function DashboardTable({
     </div>
   );
 }
+
+export default memo(DashboardTable);

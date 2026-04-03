@@ -1,11 +1,11 @@
-import { useEffect, useRef, useState } from "react";
+import { lazy, Suspense, useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
 import FileUpload from "../components/FileUpload";
 import LastScannedCard from "../components/LastScannedCard";
 import SummaryCards from "../components/SummaryCards";
-import CameraPage from "./CameraPage";
-import InventoryPage from "./InventoryPage";
-import ProfilePage from "./ProfilePage";
-import ScannerPage from "./ScannerPage";
+const CameraPage = lazy(() => import("./CameraPage"));
+const InventoryPage = lazy(() => import("./InventoryPage"));
+const ProfilePage = lazy(() => import("./ProfilePage"));
+const ScannerPage = lazy(() => import("./ScannerPage"));
 import {
   adjustScannedQuantity,
   downloadExport,
@@ -234,20 +234,25 @@ export default function DashboardPage({
     }
   };
 
-  const normalizedSearch = searchTerm.trim().toLowerCase();
-  const filteredInventory = inventory.filter((item) => {
-    const matchesSearch =
-      !normalizedSearch ||
-      item.stockNumber.toLowerCase().includes(normalizedSearch) ||
-      item.batchNumber.toLowerCase().includes(normalizedSearch);
+  const deferredSearchTerm = useDeferredValue(searchTerm);
+  const normalizedSearch = deferredSearchTerm.trim().toLowerCase();
+  const filteredInventory = useMemo(
+    () =>
+      inventory.filter((item) => {
+        const matchesSearch =
+          !normalizedSearch ||
+          item.stockNumber.toLowerCase().includes(normalizedSearch) ||
+          item.batchNumber.toLowerCase().includes(normalizedSearch);
 
-    const matchesVariance =
-      varianceFilter === "all" ||
-      (varianceFilter === "matched" && item.variance === 0) ||
-      (varianceFilter === "variance" && item.variance !== 0);
+        const matchesVariance =
+          varianceFilter === "all" ||
+          (varianceFilter === "matched" && item.variance === 0) ||
+          (varianceFilter === "variance" && item.variance !== 0);
 
-    return matchesSearch && matchesVariance;
-  });
+        return matchesSearch && matchesVariance;
+      }),
+    [inventory, normalizedSearch, varianceFilter]
+  );
 
   const handleNavigate = (page) => {
     setActivePage(page);
@@ -558,27 +563,31 @@ export default function DashboardPage({
                 </div>
               </section>
             </>
-          ) : activePage === "inventory" ? (
-            <InventoryPage
-              inventory={filteredInventory}
-              searchTerm={searchTerm}
-              onSearchChange={setSearchTerm}
-              varianceFilter={varianceFilter}
-              onVarianceFilterChange={setVarianceFilter}
-              onRemoveOne={handleRemoveOne}
-              adjustingItemId={adjustingItemId}
-            />
-          ) : activePage === "scanner" ? (
-            <ScannerPage inventory={inventory} onScan={handleScan} isLoading={isScanning} />
-          ) : activePage === "camera" ? (
-            <CameraPage inventory={inventory} onDetected={handleScan} isLoading={isScanning} />
           ) : (
-            <ProfilePage
-              currentUser={currentUser}
-              onDeleteProfile={onDeleteProfile}
-              onLogout={onLogout}
-              onProfileUpdate={onProfileUpdate}
-            />
+            <Suspense fallback={<div className="panel"><p className="muted-text">Loading...</p></div>}>
+              {activePage === "inventory" ? (
+                <InventoryPage
+                  inventory={filteredInventory}
+                  searchTerm={searchTerm}
+                  onSearchChange={setSearchTerm}
+                  varianceFilter={varianceFilter}
+                  onVarianceFilterChange={setVarianceFilter}
+                  onRemoveOne={handleRemoveOne}
+                  adjustingItemId={adjustingItemId}
+                />
+              ) : activePage === "scanner" ? (
+                <ScannerPage inventory={inventory} onScan={handleScan} isLoading={isScanning} />
+              ) : activePage === "camera" ? (
+                <CameraPage inventory={inventory} onDetected={handleScan} isLoading={isScanning} />
+              ) : (
+                <ProfilePage
+                  currentUser={currentUser}
+                  onDeleteProfile={onDeleteProfile}
+                  onLogout={onLogout}
+                  onProfileUpdate={onProfileUpdate}
+                />
+              )}
+            </Suspense>
           )}
         </div>
       </div>

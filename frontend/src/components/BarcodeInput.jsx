@@ -1,10 +1,15 @@
-import { useEffect, useRef, useState } from "react";
+import { memo, useEffect, useMemo, useRef, useState } from "react";
 
-const normalizeValue = (value) => String(value ?? "").trim();
+const normalizeValue = (value) =>
+  String(value ?? "")
+    .trim()
+    .replace(/[\n\r\t]/g, "")
+    .replace(/\s+/g, "")
+    .toUpperCase();
 
 const getUniqueSuggestions = (values) => [...new Set(values.filter(Boolean))].sort();
 
-export default function BarcodeInput({ inventory, onScan, isLoading }) {
+function BarcodeInput({ inventory, onScan, isLoading }) {
   const [batchNumber, setBatchNumber] = useState("");
   const [stockNumber, setStockNumber] = useState("");
   const [isBatchSuggestionsOpen, setIsBatchSuggestionsOpen] = useState(false);
@@ -16,15 +21,61 @@ export default function BarcodeInput({ inventory, onScan, isLoading }) {
 
   const normalizedBatch = normalizeValue(batchNumber);
   const normalizedStock = normalizeValue(stockNumber);
-  const selectedBatchInventory = inventory.filter(
-    (item) => item.batchNumber.toLowerCase() === normalizedBatch.toLowerCase()
+  const inventoryLookup = useMemo(() => {
+    const normalizedItems = inventory.map((item) => ({
+      ...item,
+      normalizedBatchNumber: normalizeValue(item.batchNumber),
+      normalizedStockNumber: normalizeValue(item.stockNumber),
+    }));
+    const batchSet = new Set();
+    const batchStockMap = new Map();
+    const batchLabelMap = new Map();
+    const stockLabelMap = new Map();
+
+    for (const item of normalizedItems) {
+      batchSet.add(item.normalizedBatchNumber);
+
+      if (!batchStockMap.has(item.normalizedBatchNumber)) {
+        batchStockMap.set(item.normalizedBatchNumber, new Set());
+        batchLabelMap.set(item.normalizedBatchNumber, item.batchNumber);
+      }
+
+      batchStockMap.get(item.normalizedBatchNumber).add(item.normalizedStockNumber);
+
+      if (!stockLabelMap.has(item.normalizedBatchNumber)) {
+        stockLabelMap.set(item.normalizedBatchNumber, new Map());
+      }
+
+      stockLabelMap
+        .get(item.normalizedBatchNumber)
+        .set(item.normalizedStockNumber, item.stockNumber);
+    }
+
+    return {
+      batchSet,
+      batchStockMap,
+      batchLabelMap,
+      stockLabelMap,
+    };
+  }, [inventory]);
+  const batchSuggestions = useMemo(
+    () =>
+      getUniqueSuggestions([...inventoryLookup.batchLabelMap.values()]).filter((item) =>
+        normalizeValue(item).includes(normalizedBatch)
+      ),
+    [inventoryLookup, normalizedBatch]
   );
-  const batchSuggestions = getUniqueSuggestions(inventory.map((item) => item.batchNumber)).filter(
-    (item) => item.toLowerCase().includes(normalizedBatch.toLowerCase())
-  );
-  const stockSuggestions = getUniqueSuggestions(
-    selectedBatchInventory.map((item) => item.stockNumber)
-  ).filter((item) => item.toLowerCase().includes(normalizedStock.toLowerCase()));
+  const stockSuggestions = useMemo(() => {
+    const batchStockLabels = inventoryLookup.stockLabelMap.get(normalizedBatch);
+
+    if (!batchStockLabels) {
+      return [];
+    }
+
+    return getUniqueSuggestions([...batchStockLabels.values()]).filter((item) =>
+      normalizeValue(item).includes(normalizedStock)
+    );
+  }, [inventoryLookup, normalizedBatch, normalizedStock]);
 
   useEffect(() => {
     batchInputRef.current?.focus();
@@ -124,13 +175,7 @@ export default function BarcodeInput({ inventory, onScan, isLoading }) {
                   setIsStockSuggestionsOpen(false);
                   setIsBatchSuggestionsOpen(Boolean(normalizeValue(nextBatchNumber)));
 
-                  if (
-                    inventory.some(
-                      (item) =>
-                        item.batchNumber.toLowerCase() ===
-                        normalizeValue(nextBatchNumber).toLowerCase()
-                    )
-                  ) {
+                  if (inventoryLookup.batchSet.has(normalizeValue(nextBatchNumber))) {
                     window.requestAnimationFrame(moveToStockInput);
                   }
                 }}
@@ -231,3 +276,5 @@ export default function BarcodeInput({ inventory, onScan, isLoading }) {
     </div>
   );
 }
+
+export default memo(BarcodeInput);
