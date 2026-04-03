@@ -1165,6 +1165,9 @@ select {
   filter: brightness(1.28) contrast(1.08) saturate(1.04);
   image-rendering: -webkit-optimize-contrast;
   image-rendering: crisp-edges;
+  transform: translateZ(0);
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
 }
 
 .camera-overlay {

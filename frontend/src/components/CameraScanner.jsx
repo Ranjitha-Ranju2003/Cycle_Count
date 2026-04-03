@@ -58,6 +58,10 @@ const SCAN_STEP = {
   BATCH: "BATCH",
   STOCK: "STOCK",
 };
+const waitForNextFrame = () =>
+  new Promise((resolve) => {
+    window.requestAnimationFrame(() => resolve());
+  });
 
 export default function CameraScanner({ inventory, onDetected, isLoading }) {
   const videoRef = useRef(null);
@@ -472,26 +476,44 @@ export default function CameraScanner({ inventory, onDetected, isLoading }) {
     console.log("Stream:", stream);
     console.log("Tracks:", stream.getVideoTracks());
 
+    video.pause();
     video.muted = true;
     video.autoplay = true;
     video.playsInline = true;
+    video.defaultMuted = true;
     video.setAttribute("muted", "");
     video.setAttribute("autoplay", "");
     video.setAttribute("playsinline", "");
+    video.setAttribute("webkit-playsinline", "true");
     video.srcObject = stream;
 
     await new Promise((resolve) => {
-      if (video.readyState >= 1) {
+      if (video.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA) {
         resolve();
         return;
       }
 
-      video.onloadedmetadata = () => {
+      const handleReady = () => {
+        video.onloadedmetadata = null;
+        video.onloadeddata = null;
+        video.oncanplay = null;
         resolve();
       };
+
+      video.onloadedmetadata = handleReady;
+      video.onloadeddata = handleReady;
+      video.oncanplay = handleReady;
     });
 
-    await video.play();
+    await waitForNextFrame();
+
+    const playPromise = video.play();
+
+    if (playPromise?.catch) {
+      await playPromise.catch((error) => {
+        throw new Error(error?.message || "Unable to start the camera preview");
+      });
+    }
   };
 
   const applyTrackEnhancements = async (stream) => {
@@ -655,13 +677,14 @@ export default function CameraScanner({ inventory, onDetected, isLoading }) {
 
     streamRef.current = stream;
     detectorRef.current = detector;
+    setCameraMode("native");
+    await waitForNextFrame();
 
     await attachStreamToVideo(stream);
     await applyTrackEnhancements(stream);
     await enableTorchIfSupported(stream);
 
     runDetectionLoop();
-    setCameraMode("native");
     setIsCameraReady(true);
     setCameraStatus(
       currentScanStep === SCAN_STEP.BATCH
