@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 
 const DETECTION_COOLDOWN_MS = 800;
-const DETECTION_INTERVAL_MS = 75;
+const DETECTION_INTERVAL_MS = 90;
 const DETECTION_FORMATS = [
   "code_128",
   "code_39",
@@ -103,6 +103,25 @@ export default function CameraScanner({ inventory, onDetected, isLoading }) {
       })),
     [inventory]
   );
+  const inventoryLookup = useMemo(() => {
+    const batchSet = new Set();
+    const batchStockMap = new Map();
+
+    for (const item of normalizedInventory) {
+      batchSet.add(item.normalizedBatchNumber);
+
+      if (!batchStockMap.has(item.normalizedBatchNumber)) {
+        batchStockMap.set(item.normalizedBatchNumber, new Set());
+      }
+
+      batchStockMap.get(item.normalizedBatchNumber).add(item.normalizedStockNumber);
+    }
+
+    return {
+      batchSet,
+      batchStockMap,
+    };
+  }, [normalizedInventory]);
   const batchSuggestions = useMemo(
     () => getUniqueSuggestions(inventory.map((item) => item.batchNumber)),
     [inventory]
@@ -214,15 +233,12 @@ export default function CameraScanner({ inventory, onDetected, isLoading }) {
     }, durationMs);
   };
 
-  const batchExists = (value) =>
-    normalizedInventory.some((item) => item.normalizedBatchNumber === normalizeValue(value));
+  const batchExists = (value) => inventoryLookup.batchSet.has(normalizeValue(value));
 
   const stockExistsInBatch = (batchValue, stockValue) =>
-    normalizedInventory.some(
-      (item) =>
-        item.normalizedBatchNumber === normalizeValue(batchValue) &&
-        item.normalizedStockNumber === normalizeValue(stockValue)
-    );
+    inventoryLookup.batchStockMap
+      .get(normalizeValue(batchValue))
+      ?.has(normalizeValue(stockValue)) || false;
 
   const submitScan = async (overrideBatch = batchNumber, overrideStock = stockNumber) => {
     const nextBatchNumber = normalizeValue(activeBatch || overrideBatch);
@@ -446,6 +462,38 @@ export default function CameraScanner({ inventory, onDetected, isLoading }) {
     setIsCameraReady(false);
   };
 
+  const attachStreamToVideo = async (stream) => {
+    const video = videoRef.current;
+
+    if (!video) {
+      throw new Error("Camera preview element not found");
+    }
+
+    console.log("Stream:", stream);
+    console.log("Tracks:", stream.getVideoTracks());
+
+    video.muted = true;
+    video.autoplay = true;
+    video.playsInline = true;
+    video.setAttribute("muted", "");
+    video.setAttribute("autoplay", "");
+    video.setAttribute("playsinline", "");
+    video.srcObject = stream;
+
+    await new Promise((resolve) => {
+      if (video.readyState >= 1) {
+        resolve();
+        return;
+      }
+
+      video.onloadedmetadata = () => {
+        resolve();
+      };
+    });
+
+    await video.play();
+  };
+
   const applyTrackEnhancements = async (stream) => {
     const [track] = stream.getVideoTracks();
 
@@ -485,15 +533,31 @@ export default function CameraScanner({ inventory, onDetected, isLoading }) {
         advanced.push({ exposureCompensation: exposureValue });
       }
 
-      if (capabilities.torch) {
-        advanced.push({ torch: true });
-      }
-
       if (advanced.length) {
         await track.applyConstraints({ advanced });
       }
     } catch (_error) {
       // Support varies by browser/device; enhancement failures are non-fatal.
+    }
+  };
+
+  const enableTorchIfSupported = async (stream) => {
+    const [track] = stream.getVideoTracks();
+
+    if (!track?.getCapabilities || !track.applyConstraints) {
+      return;
+    }
+
+    try {
+      const capabilities = track.getCapabilities();
+
+      if (capabilities.torch) {
+        await track.applyConstraints({
+          advanced: [{ torch: true }],
+        });
+      }
+    } catch (_error) {
+      console.log("Torch not supported properly");
     }
   };
 
@@ -588,15 +652,13 @@ export default function CameraScanner({ inventory, onDetected, isLoading }) {
     });
 
     const stream = await getCameraStream();
-    await applyTrackEnhancements(stream);
 
     streamRef.current = stream;
     detectorRef.current = detector;
 
-    if (videoRef.current) {
-      videoRef.current.srcObject = stream;
-      await videoRef.current.play();
-    }
+    await attachStreamToVideo(stream);
+    await applyTrackEnhancements(stream);
+    await enableTorchIfSupported(stream);
 
     runDetectionLoop();
     setCameraMode("native");
@@ -624,7 +686,7 @@ export default function CameraScanner({ inventory, onDetected, isLoading }) {
     await scanner.start(
       { facingMode: "environment" },
       {
-        fps: 20,
+        fps: 10,
         disableFlip: false,
         aspectRatio: 1.7777777778,
         qrbox: (viewfinderWidth, viewfinderHeight) => ({

@@ -135,7 +135,7 @@ export default function DashboardPage({
     try {
       setIsUploading(true);
       setError("");
-      setMessage("");
+      setMessage("Uploading Excel file...");
 
       const response = await uploadExcel(file);
       setInventory(response.inventory);
@@ -158,7 +158,7 @@ export default function DashboardPage({
     try {
       setIsScanning(true);
       setError("");
-      setMessage("");
+      setMessage("Submitting scan...");
 
       const response = await scanInventoryItem({ batchNumber, stockNumber });
       syncScannedItem(response.item);
@@ -176,7 +176,7 @@ export default function DashboardPage({
     try {
       setIsResetting(true);
       setError("");
-      setMessage("");
+      setMessage("Resetting counts...");
 
       const response = await resetInventory();
       const refreshedInventory = response?.inventory || (await fetchInventory()) || [];
@@ -195,6 +195,7 @@ export default function DashboardPage({
     try {
       setIsExporting(true);
       setError("");
+      setMessage("Preparing Excel export...");
 
       const blob = await downloadExport();
       const url = window.URL.createObjectURL(blob);
