@@ -89,25 +89,21 @@ const scanInventoryItem = async (req, res, next) => {
       return res.status(400).json({ message: "Stock Number is required" });
     }
 
-    const batchExists = await inventoryModel.batchExists(batchNumber);
+    const scanResult = await inventoryModel.recordScanByBatchAndStock(batchNumber, stockNumber);
 
-    if (!batchExists) {
+    if (scanResult.reason === "BATCH_NOT_FOUND") {
       return res.status(404).json({ message: "Batch Number not found in Excel data" });
     }
 
-    const inventoryItem = await inventoryModel.findInventoryItem(batchNumber, stockNumber);
-
-    if (!inventoryItem) {
+    if (scanResult.reason === "STOCK_NOT_IN_BATCH") {
       return res.status(404).json({
         message: "Stock Number does not belong to the selected Batch Number",
       });
     }
 
-    const updatedItem = await inventoryModel.incrementScannedQuantity(batchNumber, stockNumber);
-
     res.json({
       message: "Scan recorded successfully",
-      item: updatedItem,
+      item: scanResult.item,
     });
   } catch (error) {
     next(error);

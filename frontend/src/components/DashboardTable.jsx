@@ -1,4 +1,9 @@
-import { memo } from "react";
+import { memo, useMemo, useState } from "react";
+
+const VIRTUALIZATION_THRESHOLD = 80;
+const ROW_HEIGHT = 72;
+const OVERSCAN_COUNT = 6;
+const SCROLLER_HEIGHT = 560;
 
 function DashboardTable({
   inventory,
@@ -9,6 +14,33 @@ function DashboardTable({
   onRemoveOne,
   adjustingItemId,
 }) {
+  const [scrollTop, setScrollTop] = useState(0);
+  const shouldVirtualize = inventory.length > VIRTUALIZATION_THRESHOLD;
+  const totalHeight = inventory.length * ROW_HEIGHT;
+
+  const virtualRows = useMemo(() => {
+    if (!shouldVirtualize) {
+      return {
+        items: inventory,
+        offsetTop: 0,
+        offsetBottom: 0,
+      };
+    }
+
+    const visibleCount = Math.ceil(SCROLLER_HEIGHT / ROW_HEIGHT);
+    const startIndex = Math.max(0, Math.floor(scrollTop / ROW_HEIGHT) - OVERSCAN_COUNT);
+    const endIndex = Math.min(
+      inventory.length,
+      startIndex + visibleCount + OVERSCAN_COUNT * 2
+    );
+
+    return {
+      items: inventory.slice(startIndex, endIndex),
+      offsetTop: startIndex * ROW_HEIGHT,
+      offsetBottom: Math.max(0, totalHeight - endIndex * ROW_HEIGHT),
+    };
+  }, [inventory, scrollTop, shouldVirtualize, totalHeight]);
+
   return (
     <div className="panel table-panel">
       <div className="panel-header">
@@ -38,30 +70,36 @@ function DashboardTable({
       </div>
 
       <div className="table-wrapper">
-        <table>
-          <thead>
-            <tr>
-              <th>Stock Number</th>
-              <th>Batch Number</th>
-              <th>Expected Qty</th>
-              <th>Scanned Qty</th>
-              <th>Variance</th>
-              <th>Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            {inventory.length ? (
-              inventory.map((item) => (
-                <tr
+        <div className="table-grid-header" role="row">
+          <div>Stock Number</div>
+          <div>Batch Number</div>
+          <div>Expected Qty</div>
+          <div>Scanned Qty</div>
+          <div>Variance</div>
+          <div>Actions</div>
+        </div>
+
+        {inventory.length ? (
+          <div
+            className={`table-grid-scroller ${shouldVirtualize ? "table-grid-scroller-virtual" : ""}`}
+            onScroll={
+              shouldVirtualize ? (event) => setScrollTop(event.currentTarget.scrollTop) : undefined
+            }
+            style={shouldVirtualize ? { maxHeight: `${SCROLLER_HEIGHT}px` } : undefined}
+          >
+            <div style={{ paddingTop: virtualRows.offsetTop, paddingBottom: virtualRows.offsetBottom }}>
+              {virtualRows.items.map((item) => (
+                <div
                   key={item.id}
-                  className={item.variance === 0 ? "row-match" : "row-variance"}
+                  className={`table-grid-row ${item.variance === 0 ? "row-match" : "row-variance"}`}
+                  role="row"
                 >
-                  <td>{item.stockNumber}</td>
-                  <td>{item.batchNumber}</td>
-                  <td>{item.expectedQuantity}</td>
-                  <td>{item.scannedQuantity}</td>
-                  <td>{item.variance}</td>
-                  <td>
+                  <div>{item.stockNumber}</div>
+                  <div>{item.batchNumber}</div>
+                  <div>{item.expectedQuantity}</div>
+                  <div>{item.scannedQuantity}</div>
+                  <div>{item.variance}</div>
+                  <div>
                     <button
                       type="button"
                       className="danger-button table-action-button"
@@ -70,18 +108,16 @@ function DashboardTable({
                     >
                       {adjustingItemId === item.id ? "Updating..." : "Remove 1"}
                     </button>
-                  </td>
-                </tr>
-              ))
-            ) : (
-              <tr>
-                <td colSpan="6" className="empty-cell">
-                  No rows match the current search or filter.
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        ) : (
+          <div className="empty-cell">
+            No rows match the current search or filter.
+          </div>
+        )}
       </div>
     </div>
   );

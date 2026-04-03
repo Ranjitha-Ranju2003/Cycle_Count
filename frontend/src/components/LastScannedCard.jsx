@@ -1,4 +1,6 @@
-export default function LastScannedCard({ item }) {
+import { memo } from "react";
+
+function LastScannedCard({ item }) {
   return (
     <div className="panel last-scanned-panel">
       <div className="panel-header">
@@ -39,3 +41,5 @@ export default function LastScannedCard({ item }) {
     </div>
   );
 }
+
+export default memo(LastScannedCard);

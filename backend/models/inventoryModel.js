@@ -1,4 +1,5 @@
 const db = require("../db");
+const UPSERT_CHUNK_SIZE = 500;
 
 const mapInventoryRow = (row) => ({
   id: row.id,
@@ -66,21 +67,23 @@ const upsertInventoryItems = async (items) => {
   try {
     await client.query("BEGIN");
 
-    for (const item of items) {
+    for (let index = 0; index < items.length; index += UPSERT_CHUNK_SIZE) {
+      const chunk = items.slice(index, index + UPSERT_CHUNK_SIZE);
+      const stockNumbers = chunk.map((item) => item.stockNumber);
+      const batchNumbers = chunk.map((item) => item.batchNumber);
+      const expectedQuantities = chunk.map((item) => item.expectedQuantity);
+      const scannedQuantities = chunk.map((item) => item.scannedQuantity ?? 0);
+
       await client.query(
         `
           INSERT INTO inventory (stock_number, batch_number, expected_quantity, scanned_quantity)
-          VALUES ($1, $2, $3, COALESCE($4, 0))
+          SELECT *
+          FROM UNNEST($1::text[], $2::text[], $3::int[], $4::int[])
           ON CONFLICT (stock_number, batch_number)
           DO UPDATE SET
             expected_quantity = EXCLUDED.expected_quantity
         `,
-        [
-          item.stockNumber,
-          item.batchNumber,
-          item.expectedQuantity,
-          item.scannedQuantity ?? 0,
-        ]
+        [stockNumbers, batchNumbers, expectedQuantities, scannedQuantities]
       );
     }
 
@@ -107,6 +110,24 @@ const incrementScannedQuantity = async (batchNumber, stockNumber) => {
   );
 
   return result.rows[0] ? mapInventoryRow(result.rows[0]) : null;
+};
+
+const recordScanByBatchAndStock = async (batchNumber, stockNumber) => {
+  const updatedItem = await incrementScannedQuantity(batchNumber, stockNumber);
+
+  if (updatedItem) {
+    return {
+      item: updatedItem,
+      reason: null,
+    };
+  }
+
+  const batchFound = await batchExists(batchNumber);
+
+  return {
+    item: null,
+    reason: batchFound ? "STOCK_NOT_IN_BATCH" : "BATCH_NOT_FOUND",
+  };
 };
 
 const findInventoryItem = async (batchNumber, stockNumber) => {
@@ -162,6 +183,7 @@ module.exports = {
   findInventoryItem,
   getAllInventory,
   incrementScannedQuantity,
+  recordScanByBatchAndStock,
   resetScannedQuantities,
   upsertInventoryItems,
 };

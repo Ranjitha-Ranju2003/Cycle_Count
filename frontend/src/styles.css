@@ -1360,6 +1360,43 @@ select {
   overflow-x: auto;
 }
 
+.table-grid-header,
+.table-grid-row {
+  display: grid;
+  grid-template-columns: minmax(160px, 1.2fr) minmax(160px, 1.2fr) 120px 120px 120px 140px;
+  gap: 0.75rem;
+  align-items: center;
+  min-width: 920px;
+}
+
+.table-grid-header {
+  padding: 0.9rem 1rem;
+  border-bottom: 1px solid rgba(216, 226, 235, 0.95);
+  background: #f7fbf9;
+  font-weight: 700;
+  color: var(--muted);
+}
+
+.table-grid-scroller {
+  overflow-y: auto;
+}
+
+.table-grid-scroller-virtual {
+  overscroll-behavior: contain;
+}
+
+.table-grid-row {
+  min-height: 72px;
+  padding: 0.8rem 1rem;
+  border-bottom: 1px solid rgba(216, 226, 235, 0.72);
+  background: #fff;
+}
+
+.table-grid-row > div {
+  min-width: 0;
+  word-break: break-word;
+}
+
 .profile-avatar {
   width: 92px;
   height: 92px;

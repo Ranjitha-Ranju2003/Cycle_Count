@@ -1,4 +1,13 @@
-import { lazy, Suspense, useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
+import {
+  lazy,
+  startTransition,
+  Suspense,
+  useDeferredValue,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import FileUpload from "../components/FileUpload";
 import LastScannedCard from "../components/LastScannedCard";
 import SummaryCards from "../components/SummaryCards";
@@ -138,8 +147,10 @@ export default function DashboardPage({
       setMessage("Uploading Excel file...");
 
       const response = await uploadExcel(file);
-      setInventory(response.inventory);
-      setLastScannedItem(null);
+      startTransition(() => {
+        setInventory(response.inventory);
+        setLastScannedItem(null);
+      });
       setMessage(`Uploaded ${response.count} rows successfully.`);
     } catch (apiError) {
       setError(apiError.message ? `Failed to upload file. ${apiError.message}` : "Failed to upload file.");
@@ -149,9 +160,11 @@ export default function DashboardPage({
   };
 
   const syncScannedItem = (updatedItem) => {
-    setInventory((currentInventory) =>
-      currentInventory.map((item) => (item.id === updatedItem.id ? updatedItem : item))
-    );
+    startTransition(() => {
+      setInventory((currentInventory) =>
+        currentInventory.map((item) => (item.id === updatedItem.id ? updatedItem : item))
+      );
+    });
   };
 
   const handleScan = async ({ batchNumber, stockNumber }) => {
@@ -162,7 +175,9 @@ export default function DashboardPage({
 
       const response = await scanInventoryItem({ batchNumber, stockNumber });
       syncScannedItem(response.item);
-      setLastScannedItem(response.item);
+      startTransition(() => {
+        setLastScannedItem(response.item);
+      });
       setMessage(`Counted ${stockNumber} in batch ${batchNumber} successfully.`);
       createBeep();
     } catch (apiError) {
@@ -181,8 +196,10 @@ export default function DashboardPage({
       const response = await resetInventory();
       const refreshedInventory = response?.inventory || (await fetchInventory()) || [];
 
-      setInventory(refreshedInventory);
-      setLastScannedItem(null);
+      startTransition(() => {
+        setInventory(refreshedInventory);
+        setLastScannedItem(null);
+      });
       setMessage(response?.message || "Scanned quantities reset successfully");
     } catch (apiError) {
       setError(apiError.message);
@@ -223,9 +240,11 @@ export default function DashboardPage({
       const response = await adjustScannedQuantity(item.id, -1);
       syncScannedItem(response.item);
 
-      setLastScannedItem((currentItem) =>
-        currentItem?.id === response.item.id ? response.item : currentItem
-      );
+      startTransition(() => {
+        setLastScannedItem((currentItem) =>
+          currentItem?.id === response.item.id ? response.item : currentItem
+        );
+      });
       setMessage(`Removed 1 scanned unit from ${item.stockNumber} in ${item.batchNumber}.`);
     } catch (apiError) {
       setError(apiError.message);
