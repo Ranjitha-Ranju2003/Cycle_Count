@@ -3,10 +3,12 @@ import DashboardPage from "./pages/DashboardPage";
 import AuthPage from "./pages/AuthPage";
 import {
   deleteUserProfile,
-  forgotPassword,
   loginUser,
-  signupUser,
+  requestForgotPasswordOtp,
+  requestSignupOtp,
   updateUserProfile,
+  verifyForgotPasswordOtp,
+  verifySignupOtp,
 } from "./services/api";
 
 const SESSION_KEY = "cycle_count_session";
@@ -36,14 +38,23 @@ export default function App() {
     setSession(response.user);
   };
 
-  const handleSignup = async ({ fullName, company, email, password }) => {
-    const response = await signupUser({ fullName, company, email, password });
-    window.sessionStorage.setItem(SESSION_KEY, JSON.stringify(response.user));
-    setSession(response.user);
+  const handleRequestSignupOtp = async ({ fullName, company, email, password }) => {
+    return requestSignupOtp({ fullName, company, email, password });
   };
 
-  const handleForgotPassword = async ({ email, password }) => {
-    return forgotPassword({ email, password });
+  const handleVerifySignupOtp = async ({ email, otp }) => {
+    const response = await verifySignupOtp({ email, otp });
+    window.sessionStorage.setItem(SESSION_KEY, JSON.stringify(response.user));
+    setSession(response.user);
+    return response;
+  };
+
+  const handleRequestForgotPasswordOtp = async ({ email }) => {
+    return requestForgotPasswordOtp({ email });
+  };
+
+  const handleVerifyForgotPasswordOtp = async ({ email, otp, password }) => {
+    return verifyForgotPasswordOtp({ email, otp, password });
   };
 
   const handleProfileUpdate = async (updates) => {
@@ -66,9 +77,11 @@ export default function App() {
   if (!currentUser) {
     return (
       <AuthPage
-        onForgotPassword={handleForgotPassword}
         onLogin={handleLogin}
-        onSignup={handleSignup}
+        onRequestForgotPasswordOtp={handleRequestForgotPasswordOtp}
+        onRequestSignupOtp={handleRequestSignupOtp}
+        onVerifyForgotPasswordOtp={handleVerifyForgotPasswordOtp}
+        onVerifySignupOtp={handleVerifySignupOtp}
       />
     );
   }

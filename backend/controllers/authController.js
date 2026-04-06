@@ -1,9 +1,41 @@
 const userModel = require("../models/userModel");
+const { isEmailConfigured, sendOtpEmail } = require("../utils/emailService");
 
 const normalizeString = (value) => String(value ?? "").trim();
 const normalizeEmail = (value) => normalizeString(value).toLowerCase();
+const OTP_LENGTH = 6;
+const OTP_TTL_MINUTES = 10;
+const OTP_PURPOSE = {
+  SIGNUP: "signup",
+  RESET_PASSWORD: "reset_password",
+};
 
-const signup = async (req, res, next) => {
+const generateOtpCode = () =>
+  String(Math.floor(Math.random() * 10 ** OTP_LENGTH)).padStart(OTP_LENGTH, "0");
+
+const getOtpExpiryDate = () => {
+  const expiresAt = new Date();
+  expiresAt.setMinutes(expiresAt.getMinutes() + OTP_TTL_MINUTES);
+  return expiresAt;
+};
+
+const deliverOtp = async ({ email, otpCode, purpose }) => {
+  if (isEmailConfigured()) {
+    await sendOtpEmail({ email, otpCode, purpose });
+    return {
+      message: "OTP sent to your email.",
+    };
+  }
+
+  console.log(`[OTP:${purpose}] ${email} -> ${otpCode}`);
+
+  return {
+    message: "Email OTP is not configured, so the OTP is shown here for testing.",
+    otpPreview: otpCode,
+  };
+};
+
+const requestSignupOtp = async (req, res, next) => {
   try {
     const fullName = normalizeString(req.body.fullName);
     const company = normalizeString(req.body.company);
@@ -24,7 +56,69 @@ const signup = async (req, res, next) => {
       return res.status(409).json({ message: "An account with this email already exists." });
     }
 
-    const user = await userModel.createUser({ fullName, company, email, password });
+    const otpCode = generateOtpCode();
+    await userModel.storeEmailOtp({
+      email,
+      purpose: OTP_PURPOSE.SIGNUP,
+      otpCode,
+      payload: {
+        fullName,
+        company,
+        email,
+        password,
+      },
+      expiresAt: getOtpExpiryDate(),
+    });
+
+    const deliveryResult = await deliverOtp({
+      email,
+      otpCode,
+      purpose: OTP_PURPOSE.SIGNUP,
+    });
+
+    res.status(201).json({
+      message: `${deliveryResult.message} Enter it to complete signup.`,
+      otpPreview: deliveryResult.otpPreview || null,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+const verifySignupOtp = async (req, res, next) => {
+  try {
+    const email = normalizeEmail(req.body.email);
+    const otp = normalizeString(req.body.otp);
+
+    if (!email || !otp) {
+      return res.status(400).json({ message: "Email and OTP are required" });
+    }
+
+    const existingUser = await userModel.findUserByEmail(email);
+
+    if (existingUser) {
+      await userModel.deleteEmailOtps(email, OTP_PURPOSE.SIGNUP);
+      return res.status(409).json({ message: "An account with this email already exists." });
+    }
+
+    const otpEntry = await userModel.findValidEmailOtp({
+      email,
+      purpose: OTP_PURPOSE.SIGNUP,
+      otpCode: otp,
+    });
+
+    if (!otpEntry?.payload) {
+      return res.status(400).json({ message: "Invalid or expired OTP." });
+    }
+
+    const user = await userModel.createUser({
+      fullName: normalizeString(otpEntry.payload.fullName),
+      company: normalizeString(otpEntry.payload.company),
+      email: normalizeEmail(otpEntry.payload.email),
+      password: normalizeString(otpEntry.payload.password),
+    });
+
+    await userModel.deleteEmailOtps(email, OTP_PURPOSE.SIGNUP);
 
     res.status(201).json({
       message: "Account created successfully",
@@ -64,24 +158,76 @@ const login = async (req, res, next) => {
   }
 };
 
-const forgotPassword = async (req, res, next) => {
+const requestForgotPasswordOtp = async (req, res, next) => {
   try {
     const email = normalizeEmail(req.body.email);
+
+    if (!email) {
+      return res.status(400).json({ message: "Email is required" });
+    }
+
+    const existingUser = await userModel.findUserByEmail(email);
+
+    if (!existingUser) {
+      return res.status(404).json({ message: "No account found with this email." });
+    }
+
+    const otpCode = generateOtpCode();
+    await userModel.storeEmailOtp({
+      email,
+      purpose: OTP_PURPOSE.RESET_PASSWORD,
+      otpCode,
+      payload: null,
+      expiresAt: getOtpExpiryDate(),
+    });
+
+    const deliveryResult = await deliverOtp({
+      email,
+      otpCode,
+      purpose: OTP_PURPOSE.RESET_PASSWORD,
+    });
+
+    res.json({
+      message: `${deliveryResult.message} Verify it to reset your password.`,
+      otpPreview: deliveryResult.otpPreview || null,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+const verifyForgotPasswordOtp = async (req, res, next) => {
+  try {
+    const email = normalizeEmail(req.body.email);
+    const otp = normalizeString(req.body.otp);
     const password = normalizeString(req.body.password);
 
-    if (!email || !password) {
-      return res.status(400).json({ message: "Email and new password are required" });
+    if (!email || !otp || !password) {
+      return res.status(400).json({ message: "Email, OTP, and new password are required" });
     }
 
     if (password.length < 6) {
       return res.status(400).json({ message: "Password should be at least 6 characters" });
     }
 
+    const otpEntry = await userModel.findValidEmailOtp({
+      email,
+      purpose: OTP_PURPOSE.RESET_PASSWORD,
+      otpCode: otp,
+    });
+
+    if (!otpEntry) {
+      return res.status(400).json({ message: "Invalid or expired OTP." });
+    }
+
     const updatedUser = await userModel.updatePasswordByEmail(email, password);
 
     if (!updatedUser) {
+      await userModel.deleteEmailOtps(email, OTP_PURPOSE.RESET_PASSWORD);
       return res.status(404).json({ message: "No account found with this email." });
     }
+
+    await userModel.deleteEmailOtps(email, OTP_PURPOSE.RESET_PASSWORD);
 
     res.json({
       message: "Password updated successfully. You can now sign in.",
@@ -152,8 +298,10 @@ const deleteProfile = async (req, res, next) => {
 
 module.exports = {
   deleteProfile,
-  forgotPassword,
   login,
-  signup,
+  requestForgotPasswordOtp,
+  requestSignupOtp,
   updateProfile,
+  verifyForgotPasswordOtp,
+  verifySignupOtp,
 };

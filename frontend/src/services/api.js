@@ -5,7 +5,10 @@ const handleResponse = async (responsePromise) => {
   const response = await responsePromise;
 
   if (!response.ok) {
-    const errorData = await response.json().catch(() => ({}));
+    const errorData = await response.json().catch(async () => {
+      const text = await response.text().catch(() => "");
+      return { message: text };
+    });
     throw new Error(errorData.message || "Something went wrong");
   }
 
@@ -98,9 +101,9 @@ export const loginUser = async (credentials) => {
   return parseJsonSafely(response);
 };
 
-export const signupUser = async (payload) => {
+export const requestSignupOtp = async (payload) => {
   const response = await handleResponse(
-    fetch(`${API_BASE_URL}/auth/signup`, {
+    fetch(`${API_BASE_URL}/auth/signup/request-otp`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -112,9 +115,37 @@ export const signupUser = async (payload) => {
   return parseJsonSafely(response);
 };
 
-export const forgotPassword = async (payload) => {
+export const verifySignupOtp = async (payload) => {
   const response = await handleResponse(
-    fetch(`${API_BASE_URL}/auth/forgot-password`, {
+    fetch(`${API_BASE_URL}/auth/signup/verify-otp`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(payload),
+    })
+  );
+
+  return parseJsonSafely(response);
+};
+
+export const requestForgotPasswordOtp = async (payload) => {
+  const response = await handleResponse(
+    fetch(`${API_BASE_URL}/auth/forgot-password/request-otp`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(payload),
+    })
+  );
+
+  return parseJsonSafely(response);
+};
+
+export const verifyForgotPasswordOtp = async (payload) => {
+  const response = await handleResponse(
+    fetch(`${API_BASE_URL}/auth/forgot-password/verify-otp`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",

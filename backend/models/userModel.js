@@ -19,6 +19,18 @@ const ensureUsersTable = async () => {
       updated_at TIMESTAMP NOT NULL DEFAULT NOW()
     )
   `);
+
+  await db.query(`
+    CREATE TABLE IF NOT EXISTS email_otps (
+      id SERIAL PRIMARY KEY,
+      email TEXT NOT NULL,
+      purpose TEXT NOT NULL,
+      otp_code TEXT NOT NULL,
+      payload JSONB,
+      expires_at TIMESTAMP NOT NULL,
+      created_at TIMESTAMP NOT NULL DEFAULT NOW()
+    )
+  `);
 };
 
 const createUser = async ({ fullName, company, email, password }) => {
@@ -101,11 +113,62 @@ const deleteUserById = async (id) => {
   return result.rows[0] ? mapUserRow(result.rows[0]) : null;
 };
 
+const storeEmailOtp = async ({ email, purpose, otpCode, payload, expiresAt }) => {
+  await db.query(
+    `
+      DELETE FROM email_otps
+      WHERE LOWER(email) = LOWER($1)
+        AND purpose = $2
+    `,
+    [email, purpose]
+  );
+
+  await db.query(
+    `
+      INSERT INTO email_otps (email, purpose, otp_code, payload, expires_at)
+      VALUES ($1, $2, $3, $4, $5)
+    `,
+    [email, purpose, otpCode, payload || null, expiresAt]
+  );
+};
+
+const findValidEmailOtp = async ({ email, purpose, otpCode }) => {
+  const result = await db.query(
+    `
+      SELECT id, email, purpose, otp_code, payload, expires_at
+      FROM email_otps
+      WHERE LOWER(email) = LOWER($1)
+        AND purpose = $2
+        AND otp_code = $3
+        AND expires_at > NOW()
+      ORDER BY created_at DESC
+      LIMIT 1
+    `,
+    [email, purpose, otpCode]
+  );
+
+  return result.rows[0] || null;
+};
+
+const deleteEmailOtps = async (email, purpose) => {
+  await db.query(
+    `
+      DELETE FROM email_otps
+      WHERE LOWER(email) = LOWER($1)
+        AND purpose = $2
+    `,
+    [email, purpose]
+  );
+};
+
 module.exports = {
   createUser,
   deleteUserById,
+  deleteEmailOtps,
   ensureUsersTable,
+  findValidEmailOtp,
   findUserByEmail,
+  storeEmailOtp,
   updatePasswordByEmail,
   updateUserById,
 };
