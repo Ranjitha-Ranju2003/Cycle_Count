@@ -105,6 +105,7 @@ export default function AuthPage({
   const updateForgotPasswordField = (field, value) => {
     setForgotPasswordForm((current) => ({ ...current, [field]: value }));
     setForgotPasswordError("");
+    setHasTriedForgotPasswordSubmit(false);
   };
 
   const signupPasswordStrength = getPasswordStrength(signupForm.password);
