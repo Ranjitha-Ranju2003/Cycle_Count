@@ -5,11 +5,19 @@ const handleResponse = async (responsePromise) => {
   const response = await responsePromise;
 
   if (!response.ok) {
-    const errorData = await response.json().catch(async () => {
-      const text = await response.text().catch(() => "");
-      return { message: text };
-    });
-    throw new Error(errorData.message || "Something went wrong");
+    const rawBody = await response.text().catch(() => "");
+    let errorMessage = "";
+
+    if (rawBody) {
+      try {
+        const parsedBody = JSON.parse(rawBody);
+        errorMessage = parsedBody.message || "";
+      } catch (_error) {
+        errorMessage = rawBody;
+      }
+    }
+
+    throw new Error(errorMessage || "Something went wrong");
   }
 
   return response;
@@ -101,9 +109,9 @@ export const loginUser = async (credentials) => {
   return parseJsonSafely(response);
 };
 
-export const requestSignupOtp = async (payload) => {
+export const signupUser = async (payload) => {
   const response = await handleResponse(
-    fetch(`${API_BASE_URL}/auth/signup/request-otp`, {
+    fetch(`${API_BASE_URL}/auth/signup`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -115,37 +123,9 @@ export const requestSignupOtp = async (payload) => {
   return parseJsonSafely(response);
 };
 
-export const verifySignupOtp = async (payload) => {
+export const forgotPassword = async (payload) => {
   const response = await handleResponse(
-    fetch(`${API_BASE_URL}/auth/signup/verify-otp`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify(payload),
-    })
-  );
-
-  return parseJsonSafely(response);
-};
-
-export const requestForgotPasswordOtp = async (payload) => {
-  const response = await handleResponse(
-    fetch(`${API_BASE_URL}/auth/forgot-password/request-otp`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify(payload),
-    })
-  );
-
-  return parseJsonSafely(response);
-};
-
-export const verifyForgotPasswordOtp = async (payload) => {
-  const response = await handleResponse(
-    fetch(`${API_BASE_URL}/auth/forgot-password/verify-otp`, {
+    fetch(`${API_BASE_URL}/auth/forgot-password`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",

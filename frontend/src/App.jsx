@@ -3,12 +3,10 @@ import DashboardPage from "./pages/DashboardPage";
 import AuthPage from "./pages/AuthPage";
 import {
   deleteUserProfile,
+  forgotPassword,
   loginUser,
-  requestForgotPasswordOtp,
-  requestSignupOtp,
+  signupUser,
   updateUserProfile,
-  verifyForgotPasswordOtp,
-  verifySignupOtp,
 } from "./services/api";
 
 const SESSION_KEY = "cycle_count_session";
@@ -38,23 +36,14 @@ export default function App() {
     setSession(response.user);
   };
 
-  const handleRequestSignupOtp = async ({ fullName, company, email, password }) => {
-    return requestSignupOtp({ fullName, company, email, password });
-  };
-
-  const handleVerifySignupOtp = async ({ email, otp }) => {
-    const response = await verifySignupOtp({ email, otp });
+  const handleSignup = async ({ fullName, company, email, password }) => {
+    const response = await signupUser({ fullName, company, email, password });
     window.sessionStorage.setItem(SESSION_KEY, JSON.stringify(response.user));
     setSession(response.user);
-    return response;
   };
 
-  const handleRequestForgotPasswordOtp = async ({ email }) => {
-    return requestForgotPasswordOtp({ email });
-  };
-
-  const handleVerifyForgotPasswordOtp = async ({ email, otp, password }) => {
-    return verifyForgotPasswordOtp({ email, otp, password });
+  const handleForgotPassword = async ({ email, password }) => {
+    return forgotPassword({ email, password });
   };
 
   const handleProfileUpdate = async (updates) => {
@@ -77,11 +66,9 @@ export default function App() {
   if (!currentUser) {
     return (
       <AuthPage
+        onForgotPassword={handleForgotPassword}
         onLogin={handleLogin}
-        onRequestForgotPasswordOtp={handleRequestForgotPasswordOtp}
-        onRequestSignupOtp={handleRequestSignupOtp}
-        onVerifyForgotPasswordOtp={handleVerifyForgotPasswordOtp}
-        onVerifySignupOtp={handleVerifySignupOtp}
+        onSignup={handleSignup}
       />
     );
   }

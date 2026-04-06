@@ -56,24 +56,18 @@ const getPasswordStrength = (password) => {
 
 export default function AuthPage({
   onLogin,
-  onRequestSignupOtp,
-  onVerifySignupOtp,
-  onRequestForgotPasswordOtp,
-  onVerifyForgotPasswordOtp,
+  onSignup,
+  onForgotPassword,
 }) {
   const [mode, setMode] = useState("login");
   const [loginForm, setLoginForm] = useState(initialLoginForm);
   const [signupForm, setSignupForm] = useState(initialSignupForm);
   const [forgotPasswordForm, setForgotPasswordForm] = useState(initialForgotPasswordForm);
-  const [signupOtp, setSignupOtp] = useState("");
-  const [forgotPasswordOtp, setForgotPasswordOtp] = useState("");
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [forgotPasswordError, setForgotPasswordError] = useState("");
   const [hasTriedForgotPasswordSubmit, setHasTriedForgotPasswordSubmit] = useState(false);
-  const [isSignupOtpSent, setIsSignupOtpSent] = useState(false);
-  const [isForgotPasswordOtpSent, setIsForgotPasswordOtpSent] = useState(false);
   const shouldShowForgotPasswordError =
     mode === "forgot" &&
     hasTriedForgotPasswordSubmit &&
@@ -95,9 +89,7 @@ export default function AuthPage({
     setError("");
     setMessage("");
     setForgotPasswordForm(initialForgotPasswordForm);
-    setForgotPasswordOtp("");
     setForgotPasswordError("");
-    setIsForgotPasswordOtpSent(false);
     setHasTriedForgotPasswordSubmit(false);
     setMode("forgot");
   };
@@ -108,18 +100,10 @@ export default function AuthPage({
 
   const updateSignupField = (field, value) => {
     setSignupForm((current) => ({ ...current, [field]: value }));
-    setSignupOtp("");
-    setIsSignupOtpSent(false);
   };
 
   const updateForgotPasswordField = (field, value) => {
     setForgotPasswordForm((current) => ({ ...current, [field]: value }));
-
-    if (field === "email") {
-      setForgotPasswordOtp("");
-      setIsForgotPasswordOtpSent(false);
-    }
-
     setForgotPasswordError("");
   };
 
@@ -173,27 +157,7 @@ export default function AuthPage({
 
     try {
       setIsSubmitting(true);
-
-      if (!isSignupOtpSent) {
-        const response = await onRequestSignupOtp(signupForm);
-        setMessage(
-          response?.otpPreview
-            ? `${response.message} Demo OTP: ${response.otpPreview}`
-            : response?.message || "OTP sent to your email."
-        );
-        setIsSignupOtpSent(true);
-        return;
-      }
-
-      if (!signupOtp.trim()) {
-        setError("Enter the OTP sent to your email to complete signup.");
-        return;
-      }
-
-      await onVerifySignupOtp({
-        email: signupForm.email,
-        otp: signupOtp,
-      });
+      await onSignup(signupForm);
     } catch (authError) {
       setError(authError.message);
     } finally {
@@ -211,30 +175,12 @@ export default function AuthPage({
     try {
       setIsSubmitting(true);
 
-      if (!forgotPasswordForm.email.trim()) {
-        setForgotPasswordError("Enter your email to receive the OTP.");
-        return;
-      }
-
-      if (!isForgotPasswordOtpSent) {
-        const response = await onRequestForgotPasswordOtp({
-          email: forgotPasswordForm.email,
-        });
-        setMessage(
-          response?.otpPreview
-            ? `${response.message} Demo OTP: ${response.otpPreview}`
-            : response?.message || "OTP sent to your email."
-        );
-        setIsForgotPasswordOtpSent(true);
-        return;
-      }
-
       if (
-        !forgotPasswordOtp.trim() ||
+        !forgotPasswordForm.email.trim() ||
         !forgotPasswordForm.password.trim() ||
         !forgotPasswordForm.confirmPassword.trim()
       ) {
-        setForgotPasswordError("Enter your email, OTP, new password, and confirm password.");
+        setForgotPasswordError("Enter your email, new password, and confirm password.");
         return;
       }
 
@@ -248,15 +194,12 @@ export default function AuthPage({
         return;
       }
 
-      const response = await onVerifyForgotPasswordOtp({
+      const response = await onForgotPassword({
         email: forgotPasswordForm.email,
-        otp: forgotPasswordOtp,
         password: forgotPasswordForm.password,
       });
       setMessage(response?.message || "Password updated successfully.");
       setForgotPasswordForm(initialForgotPasswordForm);
-      setForgotPasswordOtp("");
-      setIsForgotPasswordOtpSent(false);
       setMode("login");
     } catch (authError) {
       setError(authError.message);
@@ -286,8 +229,8 @@ export default function AuthPage({
             {mode === "login"
               ? "Sign in to access the cycle count dashboard."
               : mode === "forgot"
-                ? "Use this only if you do not remember your old password. We will verify your email OTP before letting you reset it."
-                : "Verify your email with OTP before creating your workspace access."}
+                ? "Set a new password for your warehouse workspace account."
+                : "Set up access for your warehouse counting workspace."}
           </p>
         </div>
 
@@ -299,8 +242,6 @@ export default function AuthPage({
               setError("");
               setMessage("");
               setHasTriedForgotPasswordSubmit(false);
-              setSignupOtp("");
-              setIsSignupOtpSent(false);
               setMode("login");
             }}
           >
@@ -313,8 +254,6 @@ export default function AuthPage({
               setError("");
               setMessage("");
               setHasTriedForgotPasswordSubmit(false);
-              setSignupOtp("");
-              setIsSignupOtpSent(false);
               setMode("signup");
             }}
           >
@@ -433,63 +372,41 @@ export default function AuthPage({
               />
             </label>
 
-            {isForgotPasswordOtpSent ? (
-              <>
-                <label className="auth-field">
-                  <span>Email OTP</span>
-                  <input
-                    type="text"
-                    name="forgotPasswordOtp"
-                    inputMode="numeric"
-                    value={forgotPasswordOtp}
-                    placeholder="Enter the OTP sent to your email"
-                    onChange={(event) => setForgotPasswordOtp(event.target.value)}
-                  />
-                </label>
+            <label className="auth-field">
+              <span>New Password</span>
+              <input
+                type="password"
+                name="newPassword"
+                autoComplete="new-password"
+                value={forgotPasswordForm.password}
+                placeholder="Create a new password"
+                onChange={(event) => updateForgotPasswordField("password", event.target.value)}
+              />
+              {forgotPasswordStrength ? (
+                <small
+                  className={`password-strength password-strength-${forgotPasswordStrength.level}`}
+                >
+                  {forgotPasswordStrength.message}
+                </small>
+              ) : null}
+            </label>
 
-                <label className="auth-field">
-                  <span>New Password</span>
-                  <input
-                    type="password"
-                    name="newPassword"
-                    autoComplete="new-password"
-                    value={forgotPasswordForm.password}
-                    placeholder="Create a new password"
-                    onChange={(event) => updateForgotPasswordField("password", event.target.value)}
-                  />
-                  {forgotPasswordStrength ? (
-                    <small
-                      className={`password-strength password-strength-${forgotPasswordStrength.level}`}
-                    >
-                      {forgotPasswordStrength.message}
-                    </small>
-                  ) : null}
-                </label>
-
-                <label className="auth-field">
-                  <span>Confirm Password</span>
-                  <input
-                    type="password"
-                    name="confirmPassword"
-                    autoComplete="new-password"
-                    value={forgotPasswordForm.confirmPassword}
-                    placeholder="Re-enter your new password"
-                    onChange={(event) =>
-                      updateForgotPasswordField("confirmPassword", event.target.value)
-                    }
-                  />
-                </label>
-              </>
-            ) : null}
+            <label className="auth-field">
+              <span>Confirm Password</span>
+              <input
+                type="password"
+                name="confirmPassword"
+                autoComplete="new-password"
+                value={forgotPasswordForm.confirmPassword}
+                placeholder="Re-enter your new password"
+                onChange={(event) =>
+                  updateForgotPasswordField("confirmPassword", event.target.value)
+                }
+              />
+            </label>
 
             <button type="submit" disabled={isSubmitting}>
-              {isSubmitting
-                ? isForgotPasswordOtpSent
-                  ? "Resetting Password..."
-                  : "Sending OTP..."
-                : isForgotPasswordOtpSent
-                  ? "Verify OTP & Reset Password"
-                  : "Send OTP"}
+              {isSubmitting ? "Updating Password..." : "Reset Password"}
             </button>
 
             <button
@@ -499,9 +416,7 @@ export default function AuthPage({
                 setError("");
                 setMessage("");
                 setForgotPasswordForm(initialForgotPasswordForm);
-                setForgotPasswordOtp("");
                 setForgotPasswordError("");
-                setIsForgotPasswordOtpSent(false);
                 setHasTriedForgotPasswordSubmit(false);
                 setMode("login");
               }}
@@ -584,28 +499,8 @@ export default function AuthPage({
               />
             </label>
 
-            {isSignupOtpSent ? (
-              <label className="auth-field">
-                <span>Email OTP</span>
-                <input
-                  type="text"
-                  name="signupOtp"
-                  inputMode="numeric"
-                  value={signupOtp}
-                  placeholder="Enter the OTP sent to your email"
-                  onChange={(event) => setSignupOtp(event.target.value)}
-                />
-              </label>
-            ) : null}
-
             <button type="submit" disabled={isSubmitting}>
-              {isSubmitting
-                ? isSignupOtpSent
-                  ? "Verifying OTP..."
-                  : "Sending OTP..."
-                : isSignupOtpSent
-                  ? "Verify OTP & Create Account"
-                  : "Send OTP"}
+              {isSubmitting ? "Creating Account..." : "Create Account"}
             </button>
           </form>
         )}
